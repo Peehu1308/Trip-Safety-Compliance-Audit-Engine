@@ -1,0 +1,27 @@
+# Local environment and secrets
+.env
+
+# Database and backups
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest & test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE & Editor settings
+.vscode/
+.idea/
