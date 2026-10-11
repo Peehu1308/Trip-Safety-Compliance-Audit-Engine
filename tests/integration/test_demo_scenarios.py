@@ -52,11 +52,19 @@ def seeded_client(tmp_path):
             s.close()
 
     original_sl = db_mod.SessionLocal
+    original_ws = getattr(db_mod, "WriteSession", db_mod.SessionLocal)
+    original_rs = getattr(db_mod, "ReadSession", db_mod.SessionLocal)
     original_eng = db_mod.engine
+    original_weng = getattr(db_mod, "write_engine", db_mod.engine)
+    original_reng = getattr(db_mod, "read_engine", db_mod.engine)
     original_wtx = db_mod.write_tx
 
     db_mod.SessionLocal = TestSession
+    db_mod.WriteSession = TestSession
+    db_mod.ReadSession = TestSession
     db_mod.engine = test_engine
+    db_mod.write_engine = test_engine
+    db_mod.read_engine = test_engine
     db_mod.write_tx = _test_write_tx
 
     session = TestSession()
@@ -71,7 +79,11 @@ def seeded_client(tmp_path):
 
     session.close()
     db_mod.SessionLocal = original_sl
+    db_mod.WriteSession = original_ws
+    db_mod.ReadSession = original_rs
     db_mod.engine = original_eng
+    db_mod.write_engine = original_weng
+    db_mod.read_engine = original_reng
     db_mod.write_tx = original_wtx
     test_engine.dispose()
 

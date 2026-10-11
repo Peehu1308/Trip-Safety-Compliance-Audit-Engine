@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user, require_roles
+from app.core.db import write_tx
 from app.core.exceptions import NotFound
 from app.core.timeutil import utcnow
 from app.domain.enums import Role, ViolationStatus
@@ -49,32 +50,34 @@ def acknowledge_violation(
     id: int,
     req: ViolationAcknowledgeRequest,
     current_user: User = Depends(require_roles(Role.APPROVER)),
-    db: Session = Depends(get_db),
 ):
     """
     Acknowledge a violation (APPROVER only).
     Updates only lifecycle fields (status, acknowledged_by, acknowledged_at, ack_note).
     Audit logged.
     """
-    row = violation_repo.get_by_id(db, id)
-    if not row:
-        raise NotFound(f"Violation {id} not found")
-
-    row.status = ViolationStatus.ACKNOWLEDGED
-    row.acknowledged_by = current_user.username
-    row.acknowledged_at = utcnow()
-    row.ack_note = req.note
-
     actor_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    audit_log_service.append(
-        db,
-        current_user.username,
-        actor_role,
-        "VIOLATION_ACKNOWLEDGED",
-        "violation",
-        id,
-        {"ack_note": req.note},
-    )
-    db.commit()
+    ack_time = utcnow()
 
-    return ViolationResponse.model_validate(row)
+    with write_tx() as session:
+        row = violation_repo.get_by_id(session, id)
+        if not row:
+            raise NotFound(f"Violation {id} not found")
+
+        row.status = ViolationStatus.ACKNOWLEDGED
+        row.acknowledged_by = current_user.username
+        row.acknowledged_at = ack_time
+        row.ack_note = req.note
+
+        audit_log_service.append(
+            session,
+            current_user.username,
+            actor_role,
+            "VIOLATION_ACKNOWLEDGED",
+            "violation",
+            id,
+            {"ack_note": req.note},
+        )
+        res = ViolationResponse.model_validate(row)
+
+    return res

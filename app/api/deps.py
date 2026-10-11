@@ -24,9 +24,9 @@ http_bearer = HTTPBearer(auto_error=False)
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Dependency that yields a database session (looks up SessionLocal lazily for test override)."""
+    """Dependency that yields a database session (looks up ReadSession lazily for test override)."""
     import app.core.db as _db_mod
-    session = _db_mod.SessionLocal()
+    session = _db_mod.ReadSession()
     try:
         yield session
     finally:

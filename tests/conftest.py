@@ -83,7 +83,11 @@ def make_patch_db(engine):
 
         TestSession = sessionmaker(bind=engine, autocommit=False, autoflush=False)
         monkeypatch.setattr(db_mod, "SessionLocal", TestSession)
+        monkeypatch.setattr(db_mod, "WriteSession", TestSession)
+        monkeypatch.setattr(db_mod, "ReadSession", TestSession)
         monkeypatch.setattr(db_mod, "engine", engine)
+        monkeypatch.setattr(db_mod, "write_engine", engine)
+        monkeypatch.setattr(db_mod, "read_engine", engine)
 
         @contextmanager
         def _test_write_tx():
@@ -205,11 +209,19 @@ def minimal_trip(engine):
 
     # Patch globally for the duration of this fixture
     original_session = db_mod.SessionLocal
+    original_write_session = getattr(db_mod, "WriteSession", db_mod.SessionLocal)
+    original_read_session = getattr(db_mod, "ReadSession", db_mod.SessionLocal)
     original_engine = db_mod.engine
+    original_write_engine = getattr(db_mod, "write_engine", db_mod.engine)
+    original_read_engine = getattr(db_mod, "read_engine", db_mod.engine)
     original_write_tx = db_mod.write_tx
 
     db_mod.SessionLocal = TestSession
+    db_mod.WriteSession = TestSession
+    db_mod.ReadSession = TestSession
     db_mod.engine = engine
+    db_mod.write_engine = engine
+    db_mod.read_engine = engine
     db_mod.write_tx = _test_write_tx
 
     session = TestSession()
@@ -231,7 +243,11 @@ def minimal_trip(engine):
 
     session.close()
     db_mod.SessionLocal = original_session
+    db_mod.WriteSession = original_write_session
+    db_mod.ReadSession = original_read_session
     db_mod.engine = original_engine
+    db_mod.write_engine = original_write_engine
+    db_mod.read_engine = original_read_engine
     db_mod.write_tx = original_write_tx
 
 
@@ -289,10 +305,19 @@ def minimal_trip_client(tmp_path):
 
     # Patch app.core.db so that all services and deps use test DB
     original_sl = db_mod.SessionLocal
+    original_ws = getattr(db_mod, "WriteSession", db_mod.SessionLocal)
+    original_rs = getattr(db_mod, "ReadSession", db_mod.SessionLocal)
     original_eng = db_mod.engine
+    original_weng = getattr(db_mod, "write_engine", db_mod.engine)
+    original_reng = getattr(db_mod, "read_engine", db_mod.engine)
     original_wtx = db_mod.write_tx
+
     db_mod.SessionLocal = TestSession
+    db_mod.WriteSession = TestSession
+    db_mod.ReadSession = TestSession
     db_mod.engine = test_engine
+    db_mod.write_engine = test_engine
+    db_mod.read_engine = test_engine
     db_mod.write_tx = _test_write_tx
 
     # Seed minimal data
@@ -315,6 +340,10 @@ def minimal_trip_client(tmp_path):
 
     session.close()
     db_mod.SessionLocal = original_sl
+    db_mod.WriteSession = original_ws
+    db_mod.ReadSession = original_rs
     db_mod.engine = original_eng
+    db_mod.write_engine = original_weng
+    db_mod.read_engine = original_reng
     db_mod.write_tx = original_wtx
     test_engine.dispose()

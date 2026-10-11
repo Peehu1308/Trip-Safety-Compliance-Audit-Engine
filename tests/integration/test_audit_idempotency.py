@@ -120,10 +120,19 @@ def test_concurrent_audits_idempotent(minimal_trip, tmp_path):
             sess.close()
 
     orig_sl = db_mod.SessionLocal
+    orig_ws = getattr(db_mod, "WriteSession", db_mod.SessionLocal)
+    orig_rs = getattr(db_mod, "ReadSession", db_mod.SessionLocal)
     orig_eng = db_mod.engine
+    orig_weng = getattr(db_mod, "write_engine", db_mod.engine)
+    orig_reng = getattr(db_mod, "read_engine", db_mod.engine)
     orig_wtx = db_mod.write_tx
+
     db_mod.SessionLocal = FileSession
+    db_mod.WriteSession = FileSession
+    db_mod.ReadSession = FileSession
     db_mod.engine = file_engine
+    db_mod.write_engine = file_engine
+    db_mod.read_engine = file_engine
     db_mod.write_tx = _file_write_tx
 
     results = []
@@ -142,7 +151,11 @@ def test_concurrent_audits_idempotent(minimal_trip, tmp_path):
     t1.join(); t2.join()
 
     db_mod.SessionLocal = orig_sl
+    db_mod.WriteSession = orig_ws
+    db_mod.ReadSession = orig_rs
     db_mod.engine = orig_eng
+    db_mod.write_engine = orig_weng
+    db_mod.read_engine = orig_reng
     db_mod.write_tx = orig_wtx
 
     assert not errors, f"Concurrent audit raised: {errors}"
