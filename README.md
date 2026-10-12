@@ -3,6 +3,12 @@
 A high-performance, deterministic safety and compliance audit engine for employee transport built with **Python 3.11+**, **FastAPI**, **SQLAlchemy 2.0**, and **SQLite (WAL mode)**.
 
 ---
+## DEMO VIDEO
+
+
+https://github.com/user-attachments/assets/7e1ddb8e-38e8-47f5-a6ac-9a3d619ad620
+
+
 
 ## 1. Overview & Architecture
 
