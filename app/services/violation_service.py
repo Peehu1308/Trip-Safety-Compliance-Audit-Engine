@@ -9,14 +9,19 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.db import write_tx
+from app.core.exceptions import NotFound
 from app.domain.dtos import ViolationCandidate
+from app.domain.enums import ViolationStatus
 from app.domain.severity import severity_for
 from app.actions.base import AlertPayload
 from app.actions.router import router
 from app.core.timeutil import utcnow
+from app.schemas.violations import ViolationResponse
 import app.repositories.violation_repo as violation_repo
 import app.repositories.outbox_repo as outbox_repo
 import app.services.audit_log_service as audit_log_service
@@ -113,3 +118,30 @@ def persist(
             log.debug("Duplicate violation skipped: %s for trip %s", dk, trip_id)
 
     return PersistResult(new=new_rows, duplicates=dup_count)
+
+
+def acknowledge(violation_id: int, note: Optional[str], actor: str, actor_role: str) -> ViolationResponse:
+    """Acknowledge a violation inside write_tx and return ViolationResponse."""
+    with write_tx() as session:
+        row = violation_repo.get_by_id(session, violation_id)
+        if not row:
+            raise NotFound(f"Violation {violation_id} not found")
+
+        row.status = ViolationStatus.ACKNOWLEDGED
+        row.acknowledged_by = actor
+        row.acknowledged_at = utcnow()
+        row.ack_note = note
+
+        audit_log_service.append(
+            session,
+            actor,
+            actor_role,
+            "VIOLATION_ACKNOWLEDGED",
+            "violation",
+            violation_id,
+            {"ack_note": note},
+        )
+        session.flush()
+        session.refresh(row)
+        res = ViolationResponse.model_validate(row)
+        return res

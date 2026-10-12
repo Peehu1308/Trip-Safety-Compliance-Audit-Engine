@@ -88,8 +88,7 @@ def create_trip(
     db: Session = Depends(get_db),
 ):
     actor_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    trip = trip_service.create_trip(req, current_user.username, actor_role)
-    return _project_trip_response(trip, current_user, db)
+    return trip_service.create_trip(req, current_user.username, actor_role)
 
 
 @router.get("", response_model=List[TripResponse])
@@ -146,8 +145,7 @@ def update_escort(
     db: Session = Depends(get_db),
 ):
     actor_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    trip = trip_service.set_escort(id, req.escort_assigned, current_user.username, actor_role)
-    return _project_trip_response(trip, current_user, db)
+    return trip_service.set_escort(id, req.escort_assigned, current_user.username, actor_role)
 
 
 @router.post("/{id}/complete", response_model=AuditResponse)

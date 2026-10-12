@@ -5,8 +5,9 @@ Pydantic schemas for trip management and stop details.
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator, field_serializer
 from app.domain.enums import StopType, StopStatus, TripStatus
+from app.core.timeutil import ensure_utc, serialize_utc_datetime
 
 
 class StopCreate(BaseModel):
@@ -16,6 +17,14 @@ class StopCreate(BaseModel):
     planned_time: datetime
     lat: float
     lng: float
+
+    @field_validator("planned_time")
+    @classmethod
+    def validate_planned_time(cls, v: datetime) -> datetime:
+        return ensure_utc(v)
+
+
+StopIn = StopCreate
 
 
 class TripCreate(BaseModel):
@@ -46,6 +55,10 @@ class StopResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_serializer("planned_time", "actual_time", when_used="always")
+    def serialize_times(self, v: Optional[datetime]) -> Optional[str]:
+        return serialize_utc_datetime(v)
+
 
 class TripResponse(BaseModel):
     id: int
@@ -62,3 +75,7 @@ class TripResponse(BaseModel):
     stops: List[StopResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("created_at", "completed_at", when_used="always")
+    def serialize_times(self, v: Optional[datetime]) -> Optional[str]:
+        return serialize_utc_datetime(v)

@@ -137,6 +137,7 @@ def submit_otp(trip_id: int, stop_id: int, otp: str, actor_user: User) -> OtpRes
                 {"stop_id": stop_id, "result": "OK", "attempt_no": attempt_no},
             )
             otp_attempts_total.labels("ok").inc()
+            session.flush()
             result = OtpResult(result="OK", stop_status="COMPLETED", is_mismatch=False)
         else:
             # Atomic update to FROZEN
@@ -180,6 +181,7 @@ def submit_otp(trip_id: int, stop_id: int, otp: str, actor_user: User) -> OtpRes
                 {"stop_id": stop_id, "result": "MISMATCH", "attempt_no": attempt_no},
             )
             otp_attempts_total.labels("mismatch").inc()
+            session.flush()
             result = OtpResult(result="MISMATCH", stop_status="FROZEN", is_mismatch=True)
 
     # Post-commit: flush outbox if mismatch generated violation
@@ -189,7 +191,7 @@ def submit_otp(trip_id: int, stop_id: int, otp: str, actor_user: User) -> OtpRes
     return result
 
 
-def unfreeze(trip_id: int, stop_id: int, actor: str, actor_role: str, reason: str) -> None:
+def unfreeze(trip_id: int, stop_id: int, actor: str, actor_role: str, reason: str) -> dict:
     """
     Unfreeze a stop per SPEC 10.4:
       ADMIN/APPROVER only; stop must be FROZEN;
@@ -221,3 +223,5 @@ def unfreeze(trip_id: int, stop_id: int, actor: str, actor_role: str, reason: st
             stop_id,
             {"reason": reason, "trip_id": trip_id},
         )
+        session.flush()
+        return {"status": "unfrozen", "stop_id": stop_id}

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import write_tx
 from app.core.exceptions import NotFound, ValidationFailed
-from app.core.timeutil import utcnow
+from app.core.timeutil import utcnow, to_utc
 from app.domain.enums import TripStatus, StopType
 from app.models.trip import Trip, Stop
 import app.repositories.trip_repo as trip_repo
@@ -19,12 +19,12 @@ import app.repositories.user_repo as user_repo
 import app.repositories.gps_repo as gps_repo
 import app.services.audit_log_service as audit_log_service
 from app.services.audit_engine import run_audit, AuditResult
-from app.schemas.trips import TripCreate
+from app.schemas.trips import TripCreate, TripResponse
 
 log = logging.getLogger(__name__)
 
 
-def create_trip(dto: TripCreate, actor: str, actor_role: str) -> Trip:
+def create_trip(dto: TripCreate, actor: str, actor_role: str) -> TripResponse:
     """
     Validate and create a trip with stops.
     Validations (SPEC 10.7):
@@ -122,16 +122,13 @@ def create_trip(dto: TripCreate, actor: str, actor_role: str) -> Trip:
             {"driver_id": trip.driver_id, "vehicle_id": trip.vehicle_id, "stops_count": len(dto.stops)},
         )
 
-        trip_id = trip.id
-
-    with write_tx() as session:
-        created_trip = trip_repo.get_full(session, trip_id)
-        # Detach/load eagerly before return
-        _ = list(created_trip.stops)
-        return created_trip
+        session.flush()
+        session.refresh(trip, attribute_names=["stops"])
+        res = TripResponse.model_validate(trip)
+        return res
 
 
-def set_escort(trip_id: int, flag: bool, actor: str, actor_role: str) -> Trip:
+def set_escort(trip_id: int, flag: bool, actor: str, actor_role: str) -> TripResponse:
     """Set escort_assigned on trip and audit log ESCORT_ASSIGNED."""
     with write_tx() as session:
         trip = trip_repo.get_full(session, trip_id)
@@ -148,11 +145,10 @@ def set_escort(trip_id: int, flag: bool, actor: str, actor_role: str) -> Trip:
             trip.id,
             {"escort_assigned": flag},
         )
-
-    with write_tx() as session:
-        trip = trip_repo.get_full(session, trip_id)
-        _ = list(trip.stops)
-        return trip
+        session.flush()
+        session.refresh(trip, attribute_names=["stops"])
+        res = TripResponse.model_validate(trip)
+        return res
 
 
 def complete_trip(trip_id: int, actor: str, actor_role: str) -> AuditResult:
@@ -177,6 +173,7 @@ def complete_trip(trip_id: int, actor: str, actor_role: str) -> AuditResult:
                 trip.id,
                 {},
             )
+        session.flush()
 
     return run_audit(trip_id, actor, actor_role)
 
@@ -208,8 +205,8 @@ def ingest_gps(trip_id: int, fixes: List[Any], actor: str) -> dict[str, int]:
 
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
-        if ts.tzinfo is None:
-            raise ValidationFailed(f"Timestamp {ts} must be timezone-aware")
+        if ts.tzinfo is not None:
+            ts = to_utc(ts)
 
         fix_dicts.append({
             "ts": ts,
@@ -224,5 +221,6 @@ def ingest_gps(trip_id: int, fixes: List[Any], actor: str) -> dict[str, int]:
             raise NotFound(f"Trip {trip_id} not found")
 
         accepted, duplicates = gps_repo.insert_batch(session, trip_id, fix_dicts)
-
-    return {"accepted": accepted, "duplicates_ignored": duplicates}
+        session.flush()
+        res = {"accepted": accepted, "duplicates_ignored": duplicates}
+        return res

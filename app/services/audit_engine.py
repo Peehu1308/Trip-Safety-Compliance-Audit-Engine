@@ -19,6 +19,7 @@ import app.services.context_builder as context_builder
 import app.services.violation_service as violation_service
 import app.services.audit_log_service as audit_log_service
 from app.actions.dispatcher import OutboxDispatcher
+from app.schemas.violations import ViolationResponse
 
 log = logging.getLogger(__name__)
 
@@ -76,29 +77,29 @@ def run_audit(trip_id: int, actor: str, actor_role: str) -> AuditResult:
             },
         )
 
+        session.flush()
         # Collect new violation IDs before session closes
         new_ids = [v.id for v in res.new]
-        new_violations_snapshot = list(res.new)
+        violations_dto = [ViolationResponse.model_validate(v) for v in res.new]
+        total = violation_repo.count_for_trip(session, trip_id)
+
+        audit_result = AuditResult(
+            trip_id=trip_id,
+            new=len(new_ids),
+            duplicates=res.duplicates,
+            total=total,
+            rule_failures=failures,
+            violations=violations_dto,
+        )
 
     # Post-commit: dispatch outbox (never raises)
     OutboxDispatcher().flush(new_ids)
 
     duration = perf_counter() - t0
 
-    # Count total violations (new read after commit)
-    with write_tx() as session:
-        total = violation_repo.count_for_trip(session, trip_id)
-
     log.info(
         "Audit complete trip=%s new=%d dup=%d total=%d failures=%s duration=%.3fs",
         trip_id, len(new_ids), res.duplicates, total, failures, duration,
     )
 
-    return AuditResult(
-        trip_id=trip_id,
-        new=len(new_ids),
-        duplicates=res.duplicates,
-        total=total,
-        rule_failures=failures,
-        violations=new_violations_snapshot,
-    )
+    return audit_result

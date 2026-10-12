@@ -132,14 +132,15 @@ def raise_sos(
         )
 
         sos_total.inc()
-        event_id = sos_event.id
+        session.flush()
+        res = {
+            "sos_event_id": sos_event.id,
+            "violation_id": violation_id,
+            "location_source": location_source,
+        }
 
     # Flush outbox immediately post-commit (CRITICAL notifications)
     if new_violation_ids:
         OutboxDispatcher().flush(new_violation_ids)
 
-    return {
-        "sos_event_id": event_id,
-        "violation_id": violation_id,
-        "location_source": location_source,
-    }
+    return res

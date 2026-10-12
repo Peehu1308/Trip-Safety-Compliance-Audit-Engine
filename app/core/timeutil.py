@@ -9,6 +9,18 @@ def to_utc(dt: datetime) -> datetime:
         return dt
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
+def ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        raise ValueError("timezone offset required")
+    return to_utc(dt)
+
+def serialize_utc_datetime(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = to_utc(dt)
+    return dt.isoformat() + "Z"
+
 def to_local(dt: datetime, tz_name: str) -> datetime:
     tz = zoneinfo.ZoneInfo(tz_name)
     if dt.tzinfo is None:

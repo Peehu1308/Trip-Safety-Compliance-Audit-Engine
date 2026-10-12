@@ -21,7 +21,7 @@ class Trip(Base):
     
     driver = relationship("Driver")
     vehicle = relationship("Vehicle")
-    stops = relationship("Stop", back_populates="trip")
+    stops = relationship("Stop", back_populates="trip", order_by="Stop.sequence", lazy="selectin")
 
 class Stop(Base):
     __tablename__ = "stops"

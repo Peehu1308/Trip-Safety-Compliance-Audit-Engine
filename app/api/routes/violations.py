@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.violations import ViolationResponse, ViolationAcknowledgeRequest
 import app.repositories.violation_repo as violation_repo
 import app.services.audit_log_service as audit_log_service
+import app.services.violation_service as violation_service
 
 router = APIRouter(prefix="/violations", tags=["violations"])
 
@@ -57,27 +58,4 @@ def acknowledge_violation(
     Audit logged.
     """
     actor_role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    ack_time = utcnow()
-
-    with write_tx() as session:
-        row = violation_repo.get_by_id(session, id)
-        if not row:
-            raise NotFound(f"Violation {id} not found")
-
-        row.status = ViolationStatus.ACKNOWLEDGED
-        row.acknowledged_by = current_user.username
-        row.acknowledged_at = ack_time
-        row.ack_note = req.note
-
-        audit_log_service.append(
-            session,
-            current_user.username,
-            actor_role,
-            "VIOLATION_ACKNOWLEDGED",
-            "violation",
-            id,
-            {"ack_note": req.note},
-        )
-        res = ViolationResponse.model_validate(row)
-
-    return res
+    return violation_service.acknowledge(id, req.note, current_user.username, actor_role)
